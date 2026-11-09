@@ -1,0 +1,19 @@
+:root { --fondo: #0d0d10; --panel: #17171c; --borde: #2a2a32; --texto: #f4f4f6; --suave: #a3a3ae; --acento: #ff8a3d; }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; background: var(--fondo); color: var(--texto); font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
+main { width: 100%; max-width: 400px; }
+.marca { margin: 0 0 24px; text-align: center; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+section { background: var(--panel); border: 1px solid var(--borde); border-radius: 14px; padding: 24px; }
+h1 { margin: 0 0 8px; font-size: 20px; line-height: 1.25; }
+p { margin: 0 0 16px; color: var(--suave); font-size: 15px; }
+p:last-child { margin-bottom: 0; }
+strong { color: var(--texto); font-weight: 600; }
+label { display: block; margin-bottom: 6px; font-size: 14px; color: var(--suave); }
+input { width: 100%; padding: 12px; margin-bottom: 16px; border: 1px solid var(--borde); border-radius: 8px; background: var(--fondo); color: var(--texto); font-size: 16px; }
+input:focus-visible, button:focus-visible { outline: 2px solid var(--acento); outline-offset: 2px; }
+button { width: 100%; padding: 12px; border: 1px solid transparent; border-radius: 8px; background: var(--acento); color: #16110c; font-size: 16px; font-weight: 600; cursor: pointer; }
+button:disabled { opacity: .6; cursor: default; }
+button.secundario { margin-top: 8px; background: transparent; border-color: var(--borde); color: var(--texto); }
+button.enlace { margin-top: 16px; padding: 0; background: none; color: var(--suave); font-size: 14px; font-weight: 400; text-decoration: underline; }
+.aviso { padding: 12px; border: 1px solid var(--borde); border-radius: 8px; font-size: 14px; }
+[hidden] { display: none !important; }

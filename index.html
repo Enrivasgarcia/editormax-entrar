@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://*.supabase.co; form-action 'none'; base-uri 'none'">
+  <title>EditorMax · Entrar</title>
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<main>
+  <p class="marca">EditorMax</p>
+
+  <section id="cargando"><p role="status">Un momento…</p></section>
+
+  <section id="correo" hidden>
+    <h1>Entra en EditorMax</h1>
+    <p>Usa el correo con el que lo compraste.</p>
+    <form id="form-correo">
+      <label for="email">Correo electrónico</label>
+      <input id="email" type="email" autocomplete="email" required>
+      <button id="enviar" type="submit">Enviarme el código</button>
+    </form>
+  </section>
+
+  <section id="enviado" hidden>
+    <h1>Revisa tu correo</h1>
+    <p>Si <strong id="enviado-a"></strong> tiene acceso, te hemos enviado un código. Escríbelo aquí.</p>
+    <form id="form-codigo">
+      <label for="codigo">Código</label>
+      <input id="codigo" type="text" inputmode="numeric" autocomplete="one-time-code" required>
+      <button id="entrar-codigo" type="submit">Entrar</button>
+    </form>
+    <p id="codigo-error" class="aviso" role="alert" hidden></p>
+  </section>
+
+  <section id="autorizar" hidden>
+    <h1>Autorizar <span id="app-nombre"></span></h1>
+    <p>Conectará EditorMax con la cuenta <strong id="cuenta"></strong>.</p>
+    <button id="autorizar-si" type="button">Autorizar</button>
+    <button id="autorizar-no" class="secundario" type="button">Cancelar</button>
+    <button id="cambiar" class="enlace" type="button">Usar otra cuenta</button>
+  </section>
+
+  <section id="listo" hidden>
+    <h1>Ya estás dentro</h1>
+    <p>Vuelve a Claude Code para seguir.</p>
+  </section>
+
+  <section id="error" hidden>
+    <h1>No se ha podido conectar</h1>
+    <p id="error-texto" role="alert"></p>
+  </section>
+</main>
+<script src="vendor/supabase.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
