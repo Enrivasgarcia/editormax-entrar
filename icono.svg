@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="EditorMaxOS">
+  <defs>
+    <linearGradient id="tinta" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe9a8"/>
+      <stop offset=".45" stop-color="#ffc233"/>
+      <stop offset="1" stop-color="#e08a1e"/>
+    </linearGradient>
+    <linearGradient id="fondo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#211810"/>
+      <stop offset="1" stop-color="#0b0908"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#fondo)"/>
+  <rect x="2.75" y="2.75" width="58.5" height="58.5" rx="14.25" fill="none" stroke="#ffc233" stroke-opacity=".5" stroke-width="1.5"/>
+  <path fill="url(#tinta)" d="M19 15h27v8.5H28.5v4.5H43v8H28.5v4.5H46V49H19z"/>
+</svg>

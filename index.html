@@ -4,29 +4,43 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://*.supabase.co; form-action 'none'; base-uri 'none'">
-  <title>EditorMax · Entrar</title>
+  <meta name="theme-color" content="#0b0908">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src https://*.supabase.co; form-action 'none'; base-uri 'none'">
+  <title>EditorMax OS · Entrar</title>
+  <link rel="icon" type="image/svg+xml" href="icono.svg">
   <link rel="stylesheet" href="estilo.css">
 </head>
 <body>
 <main>
-  <p class="marca">EditorMax</p>
+  <div class="marca">
+    <svg class="marca-icono" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="marca-tinta" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset=".45" stop-color="#ffc233"/><stop offset="1" stop-color="#e08a1e"/></linearGradient>
+        <linearGradient id="marca-fondo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#211810"/><stop offset="1" stop-color="#0b0908"/></linearGradient>
+      </defs>
+      <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#marca-fondo)"/>
+      <rect x="2.75" y="2.75" width="58.5" height="58.5" rx="14.25" fill="none" stroke="#ffc233" stroke-opacity=".5" stroke-width="1.5"/>
+      <path fill="url(#marca-tinta)" d="M19 15h27v8.5H28.5v4.5H43v8H28.5v4.5H46V49H19z"/>
+    </svg>
+    <span class="marca-nombre">EditorMax <span class="marca-os">OS</span></span>
+  </div>
+  <p class="lema">El sistema de edición para Claude Code</p>
 
   <section id="cargando"><p role="status">Un momento…</p></section>
 
   <section id="correo" hidden>
-    <h1>Entra en EditorMax</h1>
-    <p>Usa el correo con el que lo compraste.</p>
+    <h1>Entra en <span class="oro">EditorMax OS</span></h1>
+    <p>Usa el email con el que lo compraste.</p>
     <p id="correo-aviso" class="aviso" role="alert" hidden></p>
     <form id="form-correo">
-      <label for="email">Correo electrónico</label>
-      <input id="email" type="email" autocomplete="email" required>
+      <label for="email">Tu email</label>
+      <input id="email" type="email" inputmode="email" autocomplete="email" placeholder="tu@email.com" required>
       <button id="enviar" type="submit">Continuar</button>
     </form>
   </section>
 
   <section id="enviado" hidden>
-    <h1>Revisa tu correo</h1>
+    <h1>Revisa tu <span class="oro">correo</span></h1>
     <p id="enviado-enlace">Si <strong class="enviado-a"></strong> tiene acceso, te hemos enviado un enlace para entrar. Ábrelo en este ordenador.</p>
     <p id="enviado-codigo" hidden>Si <strong class="enviado-a"></strong> tiene acceso, te hemos enviado un código. Escríbelo aquí.</p>
     <form id="form-codigo" hidden>
@@ -39,20 +53,21 @@
   </section>
 
   <section id="autorizar" hidden>
-    <h1>Autorizar <span id="app-nombre"></span></h1>
-    <p>Conectará EditorMax con la cuenta <strong id="cuenta"></strong>.</p>
+    <h1>Autorizar <span id="app-nombre" class="oro"></span></h1>
+    <p class="con-cuenta">Conecta EditorMax OS con esta cuenta:</p>
+    <p class="cuenta"><strong id="cuenta"></strong></p>
     <button id="autorizar-si" type="button">Autorizar</button>
     <button id="autorizar-no" class="secundario" type="button">Cancelar</button>
     <button id="cambiar" class="enlace" type="button">Usar otra cuenta</button>
   </section>
 
   <section id="listo" hidden>
-    <h1>Ya has entrado</h1>
+    <h1>Ya has <span class="oro">entrado</span></h1>
     <p>Vuelve a Claude Code y conecta EditorMax.</p>
   </section>
 
   <section id="otra" hidden>
-    <h1>Ya has entrado</h1>
+    <h1>Ya has <span class="oro">entrado</span></h1>
     <p>Sigue en la pestaña que se ha abierto desde el correo. Esta ya la puedes cerrar.</p>
   </section>
 
@@ -60,6 +75,8 @@
     <h1>No se ha podido conectar</h1>
     <p id="error-texto" role="alert"></p>
   </section>
+
+  <p class="pie">Grabas. Lo sueltas. Te lo devuelve editado.</p>
 </main>
 <script src="vendor/supabase.js"></script>
 <script src="config.js"></script>
