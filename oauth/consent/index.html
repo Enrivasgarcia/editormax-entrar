@@ -17,22 +17,25 @@
   <section id="correo" hidden>
     <h1>Entra en EditorMax</h1>
     <p>Usa el correo con el que lo compraste.</p>
+    <p id="correo-aviso" class="aviso" role="alert" hidden></p>
     <form id="form-correo">
       <label for="email">Correo electrónico</label>
       <input id="email" type="email" autocomplete="email" required>
-      <button id="enviar" type="submit">Enviarme el código</button>
+      <button id="enviar" type="submit">Continuar</button>
     </form>
   </section>
 
   <section id="enviado" hidden>
     <h1>Revisa tu correo</h1>
-    <p>Si <strong id="enviado-a"></strong> tiene acceso, te hemos enviado un código. Escríbelo aquí.</p>
-    <form id="form-codigo">
+    <p id="enviado-enlace">Si <strong class="enviado-a"></strong> tiene acceso, te hemos enviado un enlace para entrar. Ábrelo en este ordenador.</p>
+    <p id="enviado-codigo" hidden>Si <strong class="enviado-a"></strong> tiene acceso, te hemos enviado un código. Escríbelo aquí.</p>
+    <form id="form-codigo" hidden>
       <label for="codigo">Código</label>
       <input id="codigo" type="text" inputmode="numeric" autocomplete="one-time-code" required>
       <button id="entrar-codigo" type="submit">Entrar</button>
     </form>
     <p id="codigo-error" class="aviso" role="alert" hidden></p>
+    <button id="con-codigo" class="enlace" type="button">Introducir un código</button>
   </section>
 
   <section id="autorizar" hidden>
@@ -44,8 +47,13 @@
   </section>
 
   <section id="listo" hidden>
-    <h1>Ya estás dentro</h1>
-    <p>Vuelve a Claude Code para seguir.</p>
+    <h1>Ya has entrado</h1>
+    <p>Vuelve a Claude Code y conecta EditorMax.</p>
+  </section>
+
+  <section id="otra" hidden>
+    <h1>Ya has entrado</h1>
+    <p>Sigue en la pestaña que se ha abierto desde el correo. Esta ya la puedes cerrar.</p>
   </section>
 
   <section id="error" hidden>
