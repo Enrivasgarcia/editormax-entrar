@@ -22,6 +22,19 @@
     } catch { return null; }
   };
 
+  // El correo que se pidió desde este navegador, mientras vale su enlace (1 hora). Una sesión que llega en un enlace solo se queda aquí si es la de ese
+  // correo: así un enlace con la sesión de otro (uno que no ha mandado EditorMax) no deja a nadie dentro de una cuenta que no pidió.
+  const PEDIDO = "editormax:correo-pedido";
+  const TTL_PEDIDO = 60 * 60_000;
+  const apuntarPedido = (email) => { try { localStorage.setItem(PEDIDO, JSON.stringify({ email: email.toLowerCase(), t: Date.now() })); } catch { /* sin almacenamiento: el enlace pedirá confirmar la cuenta */ } };
+  const olvidarPedido = () => { try { localStorage.removeItem(PEDIDO); } catch { /* nada */ } };
+  const pedido = () => {
+    try {
+      const { email, t } = JSON.parse(localStorage.getItem(PEDIDO) ?? "{}");
+      return typeof t === "number" && Date.now() - t < TTL_PEDIDO && typeof email === "string" && email ? email : null;
+    } catch { return null; }
+  };
+
   // Lo que trae el enlace del correo, detrás de «#»: la sesión, o el aviso de que ya no vale. Se lee y se quita de la barra y del historial antes de nada.
   function delEnlace() {
     const f = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -54,7 +67,9 @@
     const enlace = delEnlace();
     if (!CFG.supabaseUrl || !CFG.publishableKey || !CFG.entrar) return fallo("Esta página no está configurada.");
     // la sesión del enlace se lee aquí, a mano (delEnlace): la librería no mira la dirección
-    const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.publishableKey, { auth: { flowType: "implicit", detectSessionInUrl: false, persistSession: true } });
+    const crear = (auth) => window.supabase.createClient(CFG.supabaseUrl, CFG.publishableKey, { auth: { flowType: "implicit", detectSessionInUrl: false, ...auth } });
+    const sb = crear({ persistSession: true });
+    const poner = async (cliente, tokens) => { try { return await cliente.auth.setSession(tokens); } catch { return { error: true }; } };
 
     const q = new URLSearchParams(location.search).get("authorization_id");
     if (q && ID_VALIDO.test(q)) guardar(q);
@@ -62,10 +77,20 @@
 
     let aviso = null;
     if (enlace?.acceso) {
-      // Supabase comprueba la sesión antes de guardarla: una inventada no entra
-      let r;
-      try { r = await sb.auth.setSession({ access_token: enlace.acceso, refresh_token: enlace.refresco }); } catch { r = { error: true }; }
-      if (r.error) aviso = GASTADO;
+      // La sesión del enlace se comprueba con Auth en un cliente que no guarda nada: una inventada no entra, y de una de verdad se sabe de quién es
+      const suelto = crear({ persistSession: false, autoRefreshToken: false, storageKey: "editormax-enlace" });
+      const tokens = { access_token: enlace.acceso, refresh_token: enlace.refresco };
+      const r = await poner(suelto, tokens);
+      const correo = r.error ? "" : (r.data?.user?.email ?? "").toLowerCase();
+      if (!correo) aviso = GASTADO;
+      else if (correo === pedido()) {
+        // este navegador pidió ese correo: la sesión es suya y se queda
+        if ((await poner(sb, tokens)).error) aviso = GASTADO; else olvidarPedido();
+      } else if (id) {
+        // Nadie pidió ese correo desde aquí (el enlace se abrió en otro navegador, o no lo ha mandado EditorMax). No se guarda ni sustituye a la sesión
+        // que hubiera: vale para esta pestaña, y solo cuando la persona ve la cuenta y la confirma
+        return autorizar(suelto, id, correo, { confirmar: true, base: sb });
+      } else aviso = "Abre el enlace del correo en el navegador donde lo pediste, o pide otro.";
     } else if (enlace?.gastado) aviso = GASTADO;
 
     // otra pestaña de este navegador ha entrado con el enlace mientras esta esperaba: se sigue allí
@@ -93,6 +118,7 @@
         $("enviar").disabled = false;
         return avisar("No se pudo enviar. Revisa tu conexión y vuelve a intentarlo.");
       }
+      apuntarPedido(email);
       esperar(sb, email, id);
     };
   }
@@ -129,17 +155,21 @@
     ver("enviado");
   }
 
-  async function autorizar(sb, id, email) {
+  // `sb` es el cliente con la sesión que autoriza. Con `confirmar`, esa sesión llegó en un enlace que este navegador no pidió: nada se sigue sin que la
+  // persona vea la cuenta y pulse. `base` es el cliente del navegador, para pedir el correo de otra cuenta.
+  async function autorizar(sb, id, email, { confirmar = false, base = sb } = {}) {
     const { data, error } = await sb.auth.oauth.getAuthorizationDetails(id);
     // la sesión se queda en este navegador: al conectar otra vez desde Claude Code no hace falta otro correo
     if (error || !data) { olvidar(); return fallo("Esta conexión ha caducado. Vuelve a Claude Code y conecta EditorMax otra vez."); }
-    if (!("authorization_id" in data)) return volver(data.redirect_url);
-    const d = destino(data.redirect_uri);
+    const yaAutorizada = !("authorization_id" in data);
+    if (yaAutorizada && !confirmar) return volver(data.redirect_url);
+    const d = destino(yaAutorizada ? data.redirect_url : data.redirect_uri);
     if (!d?.local) return fallo("Esta conexión no se puede completar de forma segura.");
     // Claude Code espera la respuesta en el ordenador: desde un teléfono no le llega
     if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return fallo("Abre el enlace del correo en el ordenador donde usas Claude Code.");
     $("app-nombre").textContent = (data.client?.name ?? "Claude Code").replace(/\s+/g, " ").trim().slice(0, 60) || "Claude Code";
     $("cuenta").textContent = email;
+    $("autorizar-si").disabled = $("autorizar-no").disabled = false;
     ver("autorizar");
     const decide = async (metodo) => {
       $("autorizar-si").disabled = $("autorizar-no").disabled = true;
@@ -147,9 +177,10 @@
       if (r.error || !r.data?.redirect_url) { $("autorizar-si").disabled = $("autorizar-no").disabled = false; return fallo("No se pudo completar. Vuelve a intentarlo."); }
       volver(r.data.redirect_url);
     };
-    $("autorizar-si").onclick = () => decide("approveAuthorization");
-    $("autorizar-no").onclick = () => decide("denyAuthorization");
-    $("cambiar").onclick = async () => { await sb.auth.signOut({ scope: "local" }); pedirCorreo(sb, id); };
+    // ya autorizada antes con esta cuenta: Auth no pregunta otra vez, así que la confirmación es este clic
+    $("autorizar-si").onclick = yaAutorizada ? () => volver(data.redirect_url) : () => decide("approveAuthorization");
+    $("autorizar-no").onclick = yaAutorizada ? () => { olvidar(); fallo("No se ha conectado nada. Ya puedes cerrar esta pestaña."); } : () => decide("denyAuthorization");
+    $("cambiar").onclick = async () => { await sb.auth.signOut({ scope: "local" }); pedirCorreo(base, id); };
   }
 
   arrancar().catch(() => fallo("Algo ha fallado. Vuelve a intentarlo."));
