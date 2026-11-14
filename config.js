@@ -3,6 +3,7 @@ window.EM_CONFIG = {
   supabaseUrl: "https://oxgcvxnvzjustschqoeq.supabase.co",
   publishableKey: "sb_publishable_ZJRM5RxUOC2swo74zNl4cg_m_vBMno8",
   entrar: "https://oxgcvxnvzjustschqoeq.supabase.co/functions/v1/editormax-mcp/entrar",
-  // qué trae el correo de entrada: "enlace" (el de Supabase tal cual) o "codigo" (la plantilla propia, emails/entrar.html)
+  // qué trae el correo de entrada: "enlace" (el de Supabase tal cual: no se ofrece escribir un código), "codigo" (la plantilla propia,
+  // emails/entrar.html) o "ambos" (el enlace y, para quien prefiera escribirlo, el código)
   correo: "enlace",
 };

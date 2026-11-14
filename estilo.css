@@ -107,6 +107,8 @@ button.enlace:hover { transform: none; color: var(--ink); }
 form + .aviso { margin-top: 4px; }
 .con-cuenta { margin-bottom: 8px; }
 .cuenta { margin-bottom: 22px; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 12px; background: rgba(255, 255, 255, 0.04); font-size: 16px; line-height: 1.4; }
+.cuenta:has(+ .solo-si) { margin-bottom: 10px; }
+.solo-si { margin: 0 0 20px; font-size: 13.5px; line-height: 1.45; color: var(--ink-mute); }
 .pie { margin: 22px 0 0; text-align: center; font-size: 13.5px; color: var(--ink-mute); }
 
 [hidden] { display: none !important; }

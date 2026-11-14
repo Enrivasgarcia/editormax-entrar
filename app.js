@@ -45,17 +45,22 @@
   }
 
   const esLocal = (h) => h === "localhost" || h === "::1" || h === "[::1]" || /^127(\.\d{1,3}){3}$/.test(h);
+  // Claude, cuando EditorMax se conecta como conector desde la app (Personalizar › Conectores): la vuelta es a su propia dirección, y solo a esa ruta
+  // (https://claude.com/docs/connectors/building/authentication: «https://claude.ai/api/mcp/auth_callback»)
+  const esClaude = (u) => u.protocol === "https:" && (u.host === "claude.ai" || u.host === "claude.com") && u.pathname === "/api/mcp/auth_callback" && !u.username && !u.password;
   // solo se vuelve a una web por HTTPS o a este ordenador
   function destino(url) {
     let u;
     try { u = new URL(url); } catch { return null; }
-    if (u.protocol === "https:") return { host: u.host, local: esLocal(u.hostname) };
-    if (u.protocol === "http:" && esLocal(u.hostname)) return { host: u.host, local: true };
+    if (u.protocol === "https:") return { host: u.host, local: esLocal(u.hostname), claude: esClaude(u) };
+    if (u.protocol === "http:" && esLocal(u.hostname)) return { host: u.host, local: true, claude: false };
     return null;
   }
+  // EditorMax se conecta de dos maneras: desde la app de Claude (vuelve a Claude) o desde Claude Code en la terminal (vuelve a este ordenador).
+  // Cualquier otro destino se rechaza, venga por donde venga
+  const admitido = (d) => !!d && (d.local || d.claude);
   const volver = (url) => {
-    // EditorMax solo se conecta desde Claude Code, que vuelve a este ordenador: cualquier otro destino se rechaza, venga por donde venga
-    if (!destino(url)?.local) return fallo("Esta conexión no se puede completar de forma segura.");
+    if (!admitido(destino(url))) return fallo("Esta conexión no se puede completar de forma segura.");
     olvidar();
     location.assign(url);
   };
@@ -123,16 +128,19 @@
     };
   }
 
-  // «Revisa tu correo». Con el enlace se sigue en la pestaña que abre; con un código, aquí. CFG.correo dice qué trae el correo ("enlace" o "codigo").
+  // «Revisa tu correo». Con el enlace se sigue en la pestaña que abre; con un código, aquí. CFG.correo dice qué trae el correo: "enlace" (solo el
+  // enlace: no se ofrece escribir un código que el correo no trae), "codigo" (solo el código: se pide desde el principio) o "ambos" (el enlace, y
+  // «Introducir un código» para quien prefiera escribirlo).
   function esperar(sb, email, idDeLaUrl) {
     const conCodigo = CFG.correo === "codigo";
+    const ofreceCodigo = CFG.correo === "ambos";
     const mal = (m) => { $("codigo-error").textContent = m; $("codigo-error").hidden = false; };
     const abrirCodigo = () => { $("form-codigo").hidden = false; $("con-codigo").hidden = true; $("codigo").focus(); };
     for (const n of document.querySelectorAll(".enviado-a")) n.textContent = email;
     $("enviado-enlace").hidden = conCodigo;
     $("enviado-codigo").hidden = !conCodigo;
     $("form-codigo").hidden = !conCodigo;
-    $("con-codigo").hidden = conCodigo;
+    $("con-codigo").hidden = !ofreceCodigo;
     $("con-codigo").onclick = abrirCodigo;
     $("codigo").value = "";
     $("codigo-error").hidden = true;
@@ -159,15 +167,15 @@
   // persona vea la cuenta y pulse. `base` es el cliente del navegador, para pedir el correo de otra cuenta.
   async function autorizar(sb, id, email, { confirmar = false, base = sb } = {}) {
     const { data, error } = await sb.auth.oauth.getAuthorizationDetails(id);
-    // la sesión se queda en este navegador: al conectar otra vez desde Claude Code no hace falta otro correo
-    if (error || !data) { olvidar(); return fallo("Esta conexión ha caducado. Vuelve a Claude Code y conecta EditorMax otra vez."); }
+    // la sesión se queda en este navegador: al conectar otra vez desde Claude no hace falta otro correo
+    if (error || !data) { olvidar(); return fallo("Esta conexión ha caducado. Vuelve a Claude y conecta EditorMax otra vez."); }
     const yaAutorizada = !("authorization_id" in data);
     if (yaAutorizada && !confirmar) return volver(data.redirect_url);
     const d = destino(yaAutorizada ? data.redirect_url : data.redirect_uri);
-    if (!d?.local) return fallo("Esta conexión no se puede completar de forma segura.");
-    // Claude Code espera la respuesta en el ordenador: desde un teléfono no le llega
-    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return fallo("Abre el enlace del correo en el ordenador donde usas Claude Code.");
-    $("app-nombre").textContent = (data.client?.name ?? "Claude Code").replace(/\s+/g, " ").trim().slice(0, 60) || "Claude Code";
+    if (!admitido(d)) return fallo("Esta conexión no se puede completar de forma segura.");
+    // Claude Code, en la terminal, espera la respuesta en el ordenador: desde un teléfono no le llega. A la app de Claude sí, desde donde sea
+    if (d.local && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return fallo("Abre el enlace del correo en el ordenador donde usas Claude.");
+    $("app-nombre").textContent = (data.client?.name ?? "Claude").replace(/\s+/g, " ").trim().slice(0, 60) || "Claude";
     $("cuenta").textContent = email;
     $("autorizar-si").disabled = $("autorizar-no").disabled = false;
     ver("autorizar");
