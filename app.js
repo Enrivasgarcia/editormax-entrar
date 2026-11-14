@@ -176,6 +176,12 @@
     // Claude Code, en la terminal, espera la respuesta en el ordenador: desde un teléfono no le llega. A la app de Claude sí, desde donde sea
     if (d.local && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return fallo("Abre el enlace del correo en el ordenador donde usas Claude.");
     $("app-nombre").textContent = (data.client?.name ?? "Claude").replace(/\s+/g, " ").trim().slice(0, 60) || "Claude";
+    // Quién puede haber pedido esto. Una conexión desde la app vuelve a Claude, en internet: quien la empezó en SU Claude puede mandarle el enlace a otra
+    // persona, y si esa persona autoriza, le da su EditorMax. La página no puede saber quién la empezó (llega igual), así que lo dice claro antes del botón.
+    // Una desde la terminal vuelve a este ordenador: solo puede haberla empezado alguien en él.
+    $("solo-si").textContent = d.claude
+      ? "Vas a dar acceso a tu EditorMax a una cuenta de Claude. Autoriza solo si eres tú quien acaba de pulsar «Conectar» en tu Claude. Si este enlace te ha llegado por correo o en un mensaje, pulsa Cancelar."
+      : "Autoriza solo si acabas de conectar EditorMax tú, en este ordenador.";
     $("cuenta").textContent = email;
     $("autorizar-si").disabled = $("autorizar-no").disabled = false;
     ver("autorizar");
