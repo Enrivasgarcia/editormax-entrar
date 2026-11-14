@@ -177,10 +177,11 @@
     if (d.local && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return fallo("Abre el enlace del correo en el ordenador donde usas Claude.");
     $("app-nombre").textContent = (data.client?.name ?? "Claude").replace(/\s+/g, " ").trim().slice(0, 60) || "Claude";
     // Quién puede haber pedido esto. Una conexión desde la app vuelve a Claude, en internet: quien la empezó en SU Claude puede mandarle el enlace a otra
-    // persona, y si esa persona autoriza, le da su EditorMax. La página no puede saber quién la empezó (llega igual), así que lo dice claro antes del botón.
+    // persona, y si esa persona autoriza, le da su EditorMax. La página no puede saber quién la empezó (llega igual). Ese riesgo está aceptado tal cual
+    // (Enrique, 14/11: «make it a small, calm reminder, not an alarm. I accept that risk as it is»): antes del botón va un recordatorio corto, no un aviso.
     // Una desde la terminal vuelve a este ordenador: solo puede haberla empezado alguien en él.
     $("solo-si").textContent = d.claude
-      ? "Vas a dar acceso a tu EditorMax a una cuenta de Claude. Autoriza solo si eres tú quien acaba de pulsar «Conectar» en tu Claude. Si este enlace te ha llegado por correo o en un mensaje, pulsa Cancelar."
+      ? "Autoriza solo si acabas de conectar EditorMax en tu Claude."
       : "Autoriza solo si acabas de conectar EditorMax tú, en este ordenador.";
     $("cuenta").textContent = email;
     $("autorizar-si").disabled = $("autorizar-no").disabled = false;
