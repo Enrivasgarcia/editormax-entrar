@@ -117,11 +117,18 @@
       const email = $("email").value.trim();
       if (!email) return;
       $("enviar").disabled = true;
+      let r;
       try {
-        await fetch(CFG.entrar, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(id ? { email, autorizacion: id } : { email }) });
+        r = await fetch(CFG.entrar, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(id ? { email, autorizacion: id } : { email }) });
       } catch {
         $("enviar").disabled = false;
         return avisar("No se pudo enviar. Revisa tu conexión y vuelve a intentarlo.");
+      }
+      // el servidor puede no haber mandado nada (demasiados intentos seguidos desde esta red, o un fallo suyo): hasta el 15/11 la página decía
+      // «revisa tu correo» igual, y se esperaba un correo que no iba a llegar. El tope se cuenta antes de mirar el correo: no dice nada de nadie
+      if (!r.ok) {
+        $("enviar").disabled = false;
+        return avisar(r.status === 429 ? "Demasiados intentos seguidos. Espera un minuto y vuelve a intentarlo." : "No se pudo enviar. Vuelve a intentarlo en un momento.");
       }
       apuntarPedido(email);
       esperar(sb, email, id);
@@ -170,7 +177,10 @@
     // la sesión se queda en este navegador: al conectar otra vez desde Claude no hace falta otro correo
     if (error || !data) { olvidar(); return fallo("Esta conexión ha caducado. Vuelve a Claude y conecta EditorMax otra vez."); }
     const yaAutorizada = !("authorization_id" in data);
-    if (yaAutorizada && !confirmar) return volver(data.redirect_url);
+    // ya autorizada antes: solo se vuelve sin preguntar si la vuelta es a este ordenador (la terminal). Si es a Claude, en internet, siempre se enseña
+    // la cuenta y el recordatorio y hace falta el clic: sin él, abrir un enlace de autorización (o que una página lleve a él) devolvía la conexión
+    // sin que la persona viera nada (revisión del 15/11)
+    if (yaAutorizada && !confirmar && destino(data.redirect_url)?.local) return volver(data.redirect_url);
     const d = destino(yaAutorizada ? data.redirect_url : data.redirect_uri);
     if (!admitido(d)) return fallo("Esta conexión no se puede completar de forma segura.");
     // Claude Code, en la terminal, espera la respuesta en el ordenador: desde un teléfono no le llega. A la app de Claude sí, desde donde sea
@@ -189,7 +199,13 @@
     const decide = async (metodo) => {
       $("autorizar-si").disabled = $("autorizar-no").disabled = true;
       const r = await sb.auth.oauth[metodo](id, { skipBrowserRedirect: true });
-      if (r.error || !r.data?.redirect_url) { $("autorizar-si").disabled = $("autorizar-no").disabled = false; return fallo("No se pudo completar. Vuelve a intentarlo."); }
+      if (r.error || !r.data?.redirect_url) {
+        // si la conexión caducó mientras la pantalla estaba abierta (dura 10 minutos), reintentar no sirve: se dice lo que hay que hacer
+        const sigue = await sb.auth.oauth.getAuthorizationDetails(id).catch(() => null);
+        if (!sigue || sigue.error || !sigue.data) { olvidar(); return fallo("Esta conexión ha caducado. Vuelve a Claude y conecta EditorMax otra vez."); }
+        $("autorizar-si").disabled = $("autorizar-no").disabled = false;
+        return fallo("No se pudo completar. Vuelve a intentarlo.");
+      }
       volver(r.data.redirect_url);
     };
     // ya autorizada antes con esta cuenta: Auth no pregunta otra vez, así que la confirmación es este clic
