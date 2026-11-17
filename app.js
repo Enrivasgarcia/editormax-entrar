@@ -8,7 +8,7 @@
   const TTL = 10 * 60_000;
   const ID_VALIDO = /^[A-Za-z0-9_-]{8,128}$/;
   const $ = (id) => document.getElementById(id);
-  const PANTALLAS = ["cargando", "correo", "enviado", "autorizar", "listo", "otra", "error"];
+  const PANTALLAS = ["cargando", "correo", "enviado", "confirmar", "autorizar", "listo", "otra", "error"];
   const ver = (p) => PANTALLAS.forEach((x) => { $(x).hidden = x !== p; });
   const fallo = (m) => { $("error-texto").textContent = m; ver("error"); };
   const GASTADO = "Ese enlace ya se ha usado o ha caducado. Pide otro.";
@@ -41,6 +41,9 @@
     if (location.hash) history.replaceState(null, "", location.pathname + location.search);
     const acceso = f.get("access_token"), refresco = f.get("refresh_token");
     if (acceso && refresco) return { acceso, refresco };
+    // el enlace de nuestro correo: la huella del código, con su forma
+    const huella = f.get("entrar");
+    if (huella && /^[A-Za-z0-9_-]{32,128}$/.test(huella)) return { huella };
     return f.get("error") || f.get("error_code") ? { gastado: true } : null;
   }
 
@@ -80,31 +83,65 @@
     if (q && ID_VALIDO.test(q)) guardar(q);
     const id = q && ID_VALIDO.test(q) ? q : pendiente();
 
-    let aviso = null;
-    if (enlace?.acceso) {
-      // La sesión del enlace se comprueba con Auth en un cliente que no guarda nada: una inventada no entra, y de una de verdad se sabe de quién es
-      const suelto = crear({ persistSession: false, autoRefreshToken: false, storageKey: "editormax-enlace" });
-      const tokens = { access_token: enlace.acceso, refresh_token: enlace.refresco };
-      const r = await poner(suelto, tokens);
-      const correo = r.error ? "" : (r.data?.user?.email ?? "").toLowerCase();
-      if (!correo) aviso = GASTADO;
-      else if (correo === pedido()) {
+    // un cliente que no guarda nada: en él se comprueba con Auth lo que llega en un enlace, antes de decidir si se queda en este navegador
+    const suelto = () => crear({ persistSession: false, autoRefreshToken: false, storageKey: "editormax-enlace" });
+
+    // lo que sigue cuando ya se sabe qué trajo el enlace (o si no había ninguno)
+    const seguir = async (aviso = null) => {
+      // otra pestaña de este navegador ha entrado con el enlace mientras esta esperaba: se sigue allí
+      sb.auth.onAuthStateChange((evento, sesion) => { if (evento === "SIGNED_IN" && sesion && !entrandoAqui && !$("enviado").hidden) ver("otra"); });
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return pedirCorreo(sb, id, aviso);
+      if (!id) return ver("listo");
+      await autorizar(sb, id, session.user?.email ?? "");
+    };
+
+    // Una sesión que llegó por un enlace, ya comprobada con Auth en `cliente`. `correo`, de quién es («» si Auth no la dio por buena)
+    const conSesionDelEnlace = async (cliente, tokens, correo) => {
+      if (!correo) return seguir(GASTADO);
+      if (correo === pedido()) {
         // este navegador pidió ese correo: la sesión es suya y se queda
-        if ((await poner(sb, tokens)).error) aviso = GASTADO; else olvidarPedido();
-      } else if (id) {
-        // Nadie pidió ese correo desde aquí (el enlace se abrió en otro navegador, o no lo ha mandado EditorMax). No se guarda ni sustituye a la sesión
-        // que hubiera: vale para esta pestaña, y solo cuando la persona ve la cuenta y la confirma
-        return autorizar(suelto, id, correo, { confirmar: true, base: sb });
-      } else aviso = "Abre el enlace del correo en el navegador donde lo pediste, o pide otro.";
-    } else if (enlace?.gastado) aviso = GASTADO;
+        if ((await poner(sb, tokens)).error) return seguir(GASTADO);
+        olvidarPedido();
+        return seguir();
+      }
+      // Nadie pidió ese correo desde aquí (el enlace se abrió en otro navegador, o no lo ha mandado EditorMax). No se guarda ni sustituye a la sesión
+      // que hubiera: vale para esta pestaña, y solo cuando la persona ve la cuenta y la confirma
+      if (id) return autorizar(cliente, id, correo, { confirmar: true, base: sb });
+      return seguir("Abre el enlace del correo en el navegador donde lo pediste, o pide otro.");
+    };
 
-    // otra pestaña de este navegador ha entrado con el enlace mientras esta esperaba: se sigue allí
-    sb.auth.onAuthStateChange((evento, sesion) => { if (evento === "SIGNED_IN" && sesion && !entrandoAqui && !$("enviado").hidden) ver("otra"); });
-
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) return pedirCorreo(sb, id, aviso);
-    if (!id) return ver("listo");
-    await autorizar(sb, id, session.user?.email ?? "");
+    if (enlace?.huella) {
+      // EL ENLACE DE NUESTRO CORREO (17/11). No trae una sesión: trae la huella del código, que es la misma credencial de un solo uso. ABRIRLO NO LA
+      // GASTA: un escáner de correo que siga el enlace (Defender Safe Links) llega hasta aquí y no pasa. Solo se canjea cuando la persona pulsa.
+      const avisar = (m) => { $("confirmar-aviso").textContent = m ?? ""; $("confirmar-aviso").hidden = !m; };
+      avisar(null);
+      $("confirmar-si").disabled = false;
+      $("confirmar-si").onclick = async () => {
+        $("confirmar-si").disabled = true;
+        avisar(null);
+        const cliente = suelto();
+        let r;
+        try { r = await cliente.auth.verifyOtp({ token_hash: enlace.huella, type: "email" }); } catch { r = { error: { name: "AuthRetryableFetchError" } }; }
+        // sin red no se ha gastado nada: se puede volver a pulsar
+        if (r.error && (r.error.name === "AuthRetryableFetchError" || r.error.status === 0 || r.error.status >= 500)) {
+          $("confirmar-si").disabled = false;
+          return avisar("No se pudo comprobar. Revisa tu conexión y vuelve a intentarlo.");
+        }
+        const s = r.error ? null : r.data?.session;
+        if (!s) return seguir(GASTADO);
+        return conSesionDelEnlace(cliente, { access_token: s.access_token, refresh_token: s.refresh_token }, (r.data.user?.email ?? "").toLowerCase());
+      };
+      return ver("confirmar");
+    }
+    if (enlace?.acceso) {
+      // El enlace del correo de Auth: llega con la sesión ya hecha. Se comprueba con Auth: una inventada no entra, y de una de verdad se sabe de quién es
+      const cliente = suelto();
+      const tokens = { access_token: enlace.acceso, refresh_token: enlace.refresco };
+      const r = await poner(cliente, tokens);
+      return conSesionDelEnlace(cliente, tokens, r.error ? "" : (r.data?.user?.email ?? "").toLowerCase());
+    }
+    await seguir(enlace?.gastado ? GASTADO : null);
   }
 
   function pedirCorreo(sb, id, aviso = null) {
@@ -136,19 +173,17 @@
   }
 
   // «Revisa tu correo». Con el enlace se sigue en la pestaña que abre; con un código, aquí. CFG.correo dice qué trae el correo: "enlace" (solo el
-  // enlace: no se ofrece escribir un código que el correo no trae), "codigo" (solo el código: se pide desde el principio) o "ambos" (el enlace, y
-  // «Introducir un código» para quien prefiera escribirlo).
+  // enlace de Auth: no se ofrece escribir un código que el correo no trae), "codigo" (solo el código) o "ambos" (nuestro correo, desde el 17/11: el
+  // código y un botón). Con código, se pide desde el principio: es lo primero del correo, y esta página es la que la persona tiene abierta.
   function esperar(sb, email, idDeLaUrl) {
-    const conCodigo = CFG.correo === "codigo";
-    const ofreceCodigo = CFG.correo === "ambos";
+    const ambos = CFG.correo === "ambos";
+    const conCodigo = CFG.correo === "codigo" || ambos;
     const mal = (m) => { $("codigo-error").textContent = m; $("codigo-error").hidden = false; };
-    const abrirCodigo = () => { $("form-codigo").hidden = false; $("con-codigo").hidden = true; $("codigo").focus(); };
     for (const n of document.querySelectorAll(".enviado-a")) n.textContent = email;
     $("enviado-enlace").hidden = conCodigo;
-    $("enviado-codigo").hidden = !conCodigo;
+    $("enviado-codigo").hidden = !conCodigo || ambos;
+    $("enviado-ambos").hidden = !ambos;
     $("form-codigo").hidden = !conCodigo;
-    $("con-codigo").hidden = !ofreceCodigo;
-    $("con-codigo").onclick = abrirCodigo;
     $("codigo").value = "";
     $("codigo-error").hidden = true;
     $("entrar-codigo").disabled = false;
