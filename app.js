@@ -13,6 +13,32 @@
   const fallo = (m) => { $("error-texto").textContent = m; ver("error"); };
   const GASTADO = "Ese enlace ya se ha usado o ha caducado. Pide otro.";
 
+  // EL CÓDIGO (17/11). Seis cifras: las que pone Auth (Authentication › Sign In / Providers › Email › Email OTP Length) y las casillas de la página.
+  const CIFRAS = 6;
+  // lo que vive un código: lo que dice el correo y lo que tiene Auth (Email OTP Expiration, 3600 s)
+  const TTL_CODIGO = 60 * 60_000;
+  // cuánto hay que esperar para pedir otro: el primero, medio minuto; los siguientes, uno (el servidor manda como mucho 4 por hora a un correo)
+  const ESPERA_OTRO = [30, 60];
+  // El código que hay en un texto pegado. Tal cual; o copiado con lo de alrededor («Tu código… 123456»); o partido («123 456», «123-456»)
+  function codigoDe(pegado) {
+    const t = String(pegado ?? "");
+    const justo = (x) => new RegExp(`(?:^|[^0-9])([0-9]{${CIFRAS}})(?![0-9])`).exec(x)?.[1] ?? null;
+    return justo(t) ?? justo(t.replace(/([0-9])[  \t.–—-](?=[0-9])/g, "$1")) ?? t.replace(/[^0-9]+/g, "").slice(0, CIFRAS);
+  }
+  // Un botón mientras hace lo suyo: dice qué está haciendo y gira (estilo.css, .ocupado). No se puede volver a pulsar
+  const ocupar = (b, haciendo) => { b.dataset.texto ??= b.textContent; b.textContent = haciendo; b.classList.add("ocupado"); b.disabled = true; b.setAttribute("aria-busy", "true"); };
+  const soltar = (b) => { if (b.dataset.texto) b.textContent = b.dataset.texto; b.classList.remove("ocupado"); b.disabled = false; b.removeAttribute("aria-busy"); };
+  // lo que dura algo que se ve. Con «menos movimiento» en el sistema no hay animación ni espera
+  const quieto = () => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } };
+  const ver_un_momento = (ms) => new Promise((r) => setTimeout(r, quieto() ? 0 : ms));
+  // Pide el correo de entrada al servidor. Contesta siempre lo mismo tenga acceso o no; aquí solo se sabe si llegó la petición
+  async function pedir(email, id) {
+    let r;
+    try { r = await fetch(CFG.entrar, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(id ? { email, autorizacion: id } : { email }) }); } catch { return "red"; }
+    return r.ok ? "enviado" : r.status === 429 ? "tope" : "fallo";
+  }
+  const NO_ENVIADO = { red: "No se pudo enviar. Revisa tu conexión y vuelve a intentarlo.", tope: "Demasiados intentos seguidos. Espera un minuto y vuelve a intentarlo.", fallo: "No se pudo enviar. Vuelve a intentarlo en un momento." };
+
   const guardar = (id) => { try { localStorage.setItem(CLAVE, JSON.stringify({ id, t: Date.now() })); } catch { /* sin almacenamiento: la autorización viaja en el enlace */ } };
   const olvidar = () => { try { localStorage.removeItem(CLAVE); } catch { /* nada */ } };
   const pendiente = () => {
@@ -117,15 +143,16 @@
       const avisar = (m) => { $("confirmar-aviso").textContent = m ?? ""; $("confirmar-aviso").hidden = !m; };
       avisar(null);
       $("confirmar-si").disabled = false;
+      soltar($("confirmar-si"));
       $("confirmar-si").onclick = async () => {
-        $("confirmar-si").disabled = true;
+        ocupar($("confirmar-si"), "Entrando…");
         avisar(null);
         const cliente = suelto();
         let r;
         try { r = await cliente.auth.verifyOtp({ token_hash: enlace.huella, type: "email" }); } catch { r = { error: { name: "AuthRetryableFetchError" } }; }
         // sin red no se ha gastado nada: se puede volver a pulsar
         if (r.error && (r.error.name === "AuthRetryableFetchError" || r.error.status === 0 || r.error.status >= 500)) {
-          $("confirmar-si").disabled = false;
+          soltar($("confirmar-si"));
           return avisar("No se pudo comprobar. Revisa tu conexión y vuelve a intentarlo.");
         }
         const s = r.error ? null : r.data?.session;
@@ -147,25 +174,20 @@
   function pedirCorreo(sb, id, aviso = null) {
     const avisar = (m) => { $("correo-aviso").textContent = m ?? ""; $("correo-aviso").hidden = !m; };
     avisar(aviso);
-    $("enviar").disabled = false;
+    soltar($("enviar"));
     ver("correo");
     $("form-correo").onsubmit = async (e) => {
       e.preventDefault();
       const email = $("email").value.trim();
       if (!email) return;
-      $("enviar").disabled = true;
-      let r;
-      try {
-        r = await fetch(CFG.entrar, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(id ? { email, autorizacion: id } : { email }) });
-      } catch {
-        $("enviar").disabled = false;
-        return avisar("No se pudo enviar. Revisa tu conexión y vuelve a intentarlo.");
-      }
+      avisar(null);
+      ocupar($("enviar"), "Enviando…");
+      const r = await pedir(email, id);
       // el servidor puede no haber mandado nada (demasiados intentos seguidos desde esta red, o un fallo suyo): hasta el 15/11 la página decía
       // «revisa tu correo» igual, y se esperaba un correo que no iba a llegar. El tope se cuenta antes de mirar el correo: no dice nada de nadie
-      if (!r.ok) {
-        $("enviar").disabled = false;
-        return avisar(r.status === 429 ? "Demasiados intentos seguidos. Espera un minuto y vuelve a intentarlo." : "No se pudo enviar. Vuelve a intentarlo en un momento.");
+      if (r !== "enviado") {
+        soltar($("enviar"));
+        return avisar(NO_ENVIADO[r]);
       }
       apuntarPedido(email);
       esperar(sb, email, id);
@@ -178,31 +200,135 @@
   function esperar(sb, email, idDeLaUrl) {
     const ambos = CFG.correo === "ambos";
     const conCodigo = CFG.correo === "codigo" || ambos;
-    const mal = (m) => { $("codigo-error").textContent = m; $("codigo-error").hidden = false; };
+    const form = $("form-codigo"), campo = $("codigo"), casillas = [...document.querySelectorAll("#casillas .casilla")];
     for (const n of document.querySelectorAll(".enviado-a")) n.textContent = email;
     $("enviado-enlace").hidden = conCodigo;
     $("enviado-codigo").hidden = !conCodigo || ambos;
     $("enviado-ambos").hidden = !ambos;
-    $("form-codigo").hidden = !conCodigo;
-    $("codigo").value = "";
-    $("codigo-error").hidden = true;
-    $("entrar-codigo").disabled = false;
+    form.hidden = !conCodigo;
     entrandoAqui = false;
-    $("form-codigo").onsubmit = async (e) => {
-      e.preventDefault();
-      const token = $("codigo").value.replace(/\s+/g, "");
-      if (!/^[0-9]{6,10}$/.test(token)) return mal("Escribe el código tal como aparece en el correo.");
-      $("entrar-codigo").disabled = true;
+
+    // LAS CASILLAS SON UN SOLO CAMPO DE VERDAD, con las seis pintadas debajo: así pegar, el teclado de números del móvil y el código que ofrece el
+    // sistema («autocomplete="one-time-code"») funcionan como en cualquier campo, y un lector de pantalla oye un campo y no seis
+    const pinta = () => {
+      const v = campo.value, aqui = document.activeElement === campo && !campo.readOnly;
+      casillas.forEach((c, i) => { c.textContent = v[i] ?? ""; c.classList.toggle("llena", i < v.length); c.classList.toggle("activa", aqui && i === Math.min(v.length, CIFRAS - 1)); });
+    };
+    const alFinal = () => { try { campo.setSelectionRange(campo.value.length, campo.value.length); } catch { /* nada */ } };
+    const mal = (m, { vaciar = false } = {}) => {
+      $("codigo-error").textContent = m;
+      $("codigo-error").hidden = false;
+      campo.setAttribute("aria-invalid", "true");
+      // (la clase se quita y se vuelve a poner para que el temblor empiece otra vez)
+      form.classList.remove("mal"); void form.offsetWidth; form.classList.add("mal");
+      if (vaciar) campo.value = "";
+      pinta();
+    };
+    const bien = () => { $("codigo-error").hidden = true; campo.removeAttribute("aria-invalid"); form.classList.remove("mal"); };
+    const estado = (m) => { $("codigo-estado").textContent = m ?? ""; };
+
+    // pedir otro código: hay que esperar un poco (lo cuenta), y con uno caducado es lo que se ofrece
+    let enviadoEn = Date.now(), pedidos = 0, hasta = 0, reloj = null;
+    const tic = () => {
+      const s = Math.ceil((hasta - Date.now()) / 1000);
+      $("otro-espera").hidden = s <= 0;
+      $("otro-codigo").hidden = s > 0;
+      if (s > 0) $("otro-segundos").textContent = String(s);
+      else { clearInterval(reloj); reloj = null; }
+    };
+    const aEsperar = () => { hasta = Date.now() + ESPERA_OTRO[Math.min(pedidos, ESPERA_OTRO.length - 1)] * 1000; pedidos += 1; clearInterval(reloj); reloj = setInterval(tic, 250); tic(); };
+    const dejar = () => { clearInterval(reloj); reloj = null; };
+    // con el código caducado no hay nada que escribir: lo que toca es pedir otro, y es el único botón
+    const destacarOtro = (si) => { $("otro-codigo").classList.toggle("enlace", !si); $("otro-codigo").classList.toggle("secundario", si); $("entrar-codigo").hidden = si; };
+
+    let ocupado = false;
+    const libre = () => { ocupado = false; entrandoAqui = false; campo.readOnly = false; form.classList.remove("comprobando"); $("entrar-codigo").classList.remove("hecho"); soltar($("entrar-codigo")); };
+    const entrar = async () => {
+      if (ocupado) return;
+      const token = campo.value;
+      if (token.length !== CIFRAS) { mal(`Escribe las ${CIFRAS} cifras del código.`); return campo.focus(); }
+      ocupado = true;
       entrandoAqui = true;
-      const otraVez = (m) => { entrandoAqui = false; $("entrar-codigo").disabled = false; mal(m); };
+      bien();
+      estado(null);
+      campo.readOnly = true;
+      form.classList.add("comprobando");
+      ocupar($("entrar-codigo"), "Entrando…");
+      pinta();
       let r;
-      try { r = await sb.auth.verifyOtp({ email, token, type: "email" }); } catch { return otraVez("No se pudo comprobar. Revisa tu conexión y vuelve a intentarlo."); }
-      if (r.error || !r.data?.session) return otraVez("Ese código no es correcto o ha caducado.");
+      try { r = await sb.auth.verifyOtp({ email, token, type: "email" }); } catch { r = { error: { name: "AuthRetryableFetchError" } }; }
+      if (r.error || !r.data?.session) {
+        const e = r.error ?? {};
+        libre();
+        // sin red no se ha comprobado nada: el código se queda escrito
+        if (e.name === "AuthRetryableFetchError" || e.status === 0 || e.status >= 500) mal("No se pudo comprobar. Revisa tu conexión y vuelve a intentarlo.");
+        else if (e.status === 429) mal("Demasiados intentos seguidos. Espera un minuto y vuelve a intentarlo.");
+        // Auth contesta lo mismo a un código que no es y a uno caducado. Lo que sí se sabe aquí es cuándo se pidió
+        else if (Date.now() - enviadoEn >= TTL_CODIGO) { mal("Ese código ha caducado. Pide uno nuevo: te llega en un momento.", { vaciar: true }); hasta = 0; tic(); destacarOtro(true); return $("otro-codigo").focus(); }
+        else mal("Ese código no es correcto. Revísalo, o usa el del último correo que te hemos enviado.", { vaciar: true });
+        return campo.focus();
+      }
+      // dentro: se ve un momento, y se sigue
+      dejar();
+      form.classList.remove("comprobando");
+      form.classList.add("dentro");
+      $("entrar-codigo").classList.remove("ocupado");
+      $("entrar-codigo").classList.add("hecho");
+      $("entrar-codigo").textContent = "Dentro";
+      await ver_un_momento(700);
       const id = idDeLaUrl ?? pendiente();
       if (id) await autorizar(sb, id, r.data.user?.email ?? email);
       else ver("listo");
     };
+
+    campo.value = "";
+    libre();
+    bien();
+    estado(null);
+    form.classList.remove("dentro");
+    destacarOtro(false);
+    // lo que no es una cifra no entra, y con la última se entra solo
+    campo.oninput = () => {
+      const v = campo.value.replace(/[^0-9]+/g, "").slice(0, CIFRAS);
+      if (v !== campo.value) campo.value = v;
+      bien();
+      pinta();
+      if (v.length === CIFRAS) entrar();
+    };
+    // pegado: el código entero de una vez, venga como venga
+    campo.onpaste = (e) => {
+      e.preventDefault();
+      if (campo.readOnly) return;
+      campo.value = codigoDe(e.clipboardData?.getData("text"));
+      bien();
+      pinta();
+      if (campo.value.length === CIFRAS) entrar();
+    };
+    campo.onfocus = campo.onblur = pinta;
+    // el cursor va siempre al final: las casillas se llenan en orden
+    campo.onclick = campo.onkeyup = campo.onselect = alFinal;
+    form.onsubmit = (e) => { e.preventDefault(); return entrar(); };
+    $("otro-codigo").onclick = async () => {
+      if (ocupado) return;
+      ocupar($("otro-codigo"), "Enviando…");
+      const r = await pedir(email, idDeLaUrl);
+      soltar($("otro-codigo"));
+      if (r !== "enviado") return mal(NO_ENVIADO[r]);
+      apuntarPedido(email);
+      enviadoEn = Date.now();
+      campo.value = "";
+      bien();
+      destacarOtro(false);
+      aEsperar();
+      estado("Te hemos enviado un código nuevo. El anterior ya no vale.");
+      campo.focus();
+      pinta();
+    };
+    $("otro-correo").onclick = () => { if (ocupado) return; dejar(); pedirCorreo(sb, idDeLaUrl); $("email").focus(); $("email").select(); };
+    aEsperar();
     ver("enviado");
+    pinta();
+    if (conCodigo) { campo.focus(); pinta(); }
   }
 
   // `sb` es el cliente con la sesión que autoriza. Con `confirmar`, esa sesión llegó en un enlace que este navegador no pidió: nada se sigue sin que la

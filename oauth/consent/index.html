@@ -42,14 +42,26 @@
   <section id="enviado" hidden>
     <h1>Revisa tu <span class="oro">correo</span></h1>
     <p id="enviado-enlace">Si <strong class="enviado-a"></strong> tiene acceso, te hemos enviado un enlace para entrar. Ábrelo en este ordenador.</p>
-    <p id="enviado-codigo" hidden>Si <strong class="enviado-a"></strong> tiene acceso, te hemos enviado un código. Escríbelo aquí.</p>
-    <p id="enviado-ambos" hidden>Si <strong class="enviado-a"></strong> tiene acceso, te hemos enviado un código. Escríbelo aquí, o pulsa el botón del correo en este ordenador.</p>
-    <form id="form-codigo" hidden>
-      <label for="codigo">Código</label>
-      <input id="codigo" type="text" inputmode="numeric" autocomplete="one-time-code" required>
+    <p id="enviado-codigo" hidden>Si <strong class="enviado-a"></strong> tiene acceso, te hemos enviado un código de 6 cifras. Escríbelo o pégalo aquí.</p>
+    <p id="enviado-ambos" hidden>Si <strong class="enviado-a"></strong> tiene acceso, te hemos enviado un código de 6 cifras. Escríbelo o pégalo aquí, o pulsa el botón del correo en este ordenador.</p>
+    <form id="form-codigo" hidden novalidate>
+      <label for="codigo">Código de 6 cifras</label>
+      <div id="casillas" class="casillas">
+        <input id="codigo" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="codigo-error">
+        <span class="casilla" aria-hidden="true"></span>
+        <span class="casilla" aria-hidden="true"></span>
+        <span class="casilla" aria-hidden="true"></span>
+        <span class="casilla" aria-hidden="true"></span>
+        <span class="casilla" aria-hidden="true"></span>
+        <span class="casilla" aria-hidden="true"></span>
+      </div>
+      <p id="codigo-error" class="aviso" role="alert" hidden></p>
       <button id="entrar-codigo" type="submit">Entrar</button>
+      <p id="codigo-estado" class="estado" role="status"></p>
+      <p id="otro-espera" class="otro">¿No te llega? Podrás pedir otro código en <span id="otro-segundos">30</span> s.</p>
+      <button id="otro-codigo" class="enlace" type="button" hidden>Enviar un código nuevo</button>
+      <button id="otro-correo" class="enlace" type="button">Usar otro email</button>
     </form>
-    <p id="codigo-error" class="aviso" role="alert" hidden></p>
   </section>
 
   <section id="confirmar" hidden>
@@ -70,6 +82,7 @@
   </section>
 
   <section id="listo" hidden>
+    <div class="entrado" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
     <h1>Ya has <span class="oro">entrado</span></h1>
     <p>Vuelve a Claude y conecta EditorMax.</p>
   </section>
