@@ -238,6 +238,8 @@
     };
     const aEsperar = () => { hasta = Date.now() + ESPERA_OTRO[Math.min(pedidos, ESPERA_OTRO.length - 1)] * 1000; pedidos += 1; clearInterval(reloj); reloj = setInterval(tic, 250); tic(); };
     const dejar = () => { clearInterval(reloj); reloj = null; };
+    // quien va a mirar el correo deja esta pestaña detrás, y ahí el navegador frena los relojes: al volver, la cuenta se pone al día en el acto
+    document.onvisibilitychange = () => { if (reloj) tic(); };
     // con el código caducado no hay nada que escribir: lo que toca es pedir otro, y es el único botón
     const destacarOtro = (si) => { $("otro-codigo").classList.toggle("enlace", !si); $("otro-codigo").classList.toggle("secundario", si); $("entrar-codigo").hidden = si; };
 
